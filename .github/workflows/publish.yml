@@ -1,0 +1,82 @@
+name: Publish microvm image
+
+on:
+  pull_request:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      image:
+        description: OCI image reference
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo umoci qemu-utils e2fsprogs systemd
+
+      - name: Build the qcow2
+        env:
+          INPUT_IMAGE: ${{ inputs.image }}
+        run: |
+          set -euo pipefail
+          set -a
+          # shellcheck disable=SC1091
+          source image.env
+          set +a
+          if [[ -n "${INPUT_IMAGE}" ]]; then
+            IMAGE="$INPUT_IMAGE"
+          fi
+          sudo ./oci-to-qcow2.sh --image "$IMAGE" --size "$SIZE" --output "$FILENAME"
+          sudo chmod a+r "$FILENAME"
+          qemu-img convert -c -O qcow2 "$FILENAME" "${FILENAME}.compressed"
+          mv -f "${FILENAME}.compressed" "$FILENAME"
+          sha256sum "$FILENAME" | tee "${FILENAME}.sha256"
+          digest="$(skopeo inspect --format '{{.Digest}}' "docker://${IMAGE}")"
+          {
+            echo "IMAGE=${IMAGE}"
+            echo "DIGEST=${digest}"
+            echo "FILENAME=${FILENAME}"
+          } >> "$GITHUB_ENV"
+
+      - name: Publish the release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rest="$IMAGE"
+          first="${IMAGE%%/*}"
+          if [[ "$first" == *.* || "$first" == *:* ]]; then
+            rest="${IMAGE#*/}"
+          fi
+          namespace="${rest%%/*}"
+          version="${IMAGE##*:}"
+          if [[ "$version" == "$IMAGE" ]]; then
+            version="latest"
+          fi
+          count="$(git rev-list --count HEAD)"
+          tag="$(printf '%s' "${namespace}-${version}-${count}" | tr -c 'A-Za-z0-9._-' '-')"
+          notes="$(printf 'Source: %s\nDigest: %s\n' "$IMAGE" "$DIGEST")"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$FILENAME" "${FILENAME}.sha256" --clobber
+            gh release edit "$tag" --notes "$notes"
+          else
+            gh release create "$tag" "$FILENAME" "${FILENAME}.sha256" \
+              --title "$tag" \
+              --notes "$notes"
+          fi

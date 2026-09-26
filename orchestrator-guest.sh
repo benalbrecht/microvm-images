@@ -81,7 +81,7 @@ mount --bind /sys "$ROOTFS/sys"
 mount --bind /dev "$ROOTFS/dev"
 
 cmd=$(pkg_cmd "$ROOTFS")
-chroot "$ROOTFS" /bin/bash -c "$cmd install -y git 'dnf-command(copr)'"
+chroot "$ROOTFS" /bin/bash -c "$cmd install -y git 'dnf-command(copr)' xorriso"
 # Pinned EPEL 10 build from jdxcode/mise. The repo is not left enabled.
 chroot "$ROOTFS" /bin/bash -c "dnf -y copr enable jdxcode/mise"
 chroot "$ROOTFS" /bin/bash -c "dnf install -y mise-2026.9.14-1.el10"

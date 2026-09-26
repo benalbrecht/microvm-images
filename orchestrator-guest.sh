@@ -97,7 +97,7 @@ rm -f "$ROOTFS"/etc/ssh/ssh_host_*
 
 install -d -m 755 "$ROOTFS/mnt/cache" "$ROOTFS/opt/language" "$ROOTFS/opt/agents" \
   "$ROOTFS/usr/local/libexec" "$ROOTFS/etc/ssh/sshd_config.d" \
-  "$ROOTFS/etc/cloud/cloud.cfg.d" "$ROOTFS/etc/clojure" "$ROOTFS/etc/maven" \
+  "$ROOTFS/etc/cloud/cloud.cfg.d" \
   "$ROOTFS/etc/systemd/system"
 
 cat > "$ROOTFS/etc/ssh/sshd_config.d/00-sandbox.conf" <<'EOF'
@@ -123,7 +123,7 @@ EOF
 
 cat > "$ROOTFS/usr/local/libexec/orchestrator-mount-cache" <<'EOF'
 #!/bin/bash
-# The hypervisor opens the cache read-only for attempts and writable for a warm.
+# The cache disk is writable. Mount read-only only when the device itself is.
 set -euo pipefail
 dev=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -133,14 +133,16 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 [[ -n "$dev" ]] || exit 0
 mkdir -p /mnt/cache
-if findmnt -n /mnt/cache >/dev/null 2>&1; then
-  exit 0
+if ! findmnt -n /mnt/cache >/dev/null 2>&1; then
+  opts=rw
+  if [[ "$(blockdev --getro "$dev")" == 1 ]]; then
+    opts=ro
+  fi
+  mount -o "$opts" "$dev" /mnt/cache
 fi
-opts=rw
-if [[ "$(blockdev --getro "$dev")" == 1 ]]; then
-  opts=ro
-fi
-mount -o "$opts" "$dev" /mnt/cache
+[[ "$(blockdev --getro "$dev")" == 1 ]] && exit 0
+chown sandbox:sandbox /mnt/cache
+chmod 755 /mnt/cache
 EOF
 chmod 755 "$ROOTFS/usr/local/libexec/orchestrator-mount-cache"
 
@@ -160,6 +162,61 @@ WantedBy=multi-user.target
 EOF
 systemctl --root="$ROOTFS" enable orchestrator-cache.service
 
+cat > "$ROOTFS/usr/local/libexec/orchestrator-session-env" <<'EOF'
+#!/bin/bash
+# Publish /etc/environment before sshd. The image file is the base. The
+# language ISO may add a dotenv. Cache directories are the /mnt/cache paths
+# named on that ISO, outside installs and bin. This script copies files and
+# creates those directories. It does not run mise.
+set -euo pipefail
+base=/usr/lib/orchestrator/environment
+[[ -f "$base" ]] || exit 1
+tmp=$(mktemp)
+cat "$base" > "$tmp"
+if [[ -f /opt/language/environment ]]; then
+  printf '\n' >> "$tmp"
+  cat /opt/language/environment >> "$tmp"
+fi
+chmod 644 "$tmp"
+mv -f "$tmp" /etc/environment
+if findmnt -n /mnt/cache >/dev/null 2>&1 && [[ -d /opt/language ]]; then
+  while IFS= read -r dir; do
+    [[ -z "$dir" || "$dir" == *..* ]] && continue
+    mkdir -p -- "$dir"
+    chown sandbox:sandbox -- "$dir"
+    chmod 755 -- "$dir"
+    parent=$(dirname -- "$dir")
+    while [[ "$parent" == /mnt/cache/* ]]; do
+      chown sandbox:sandbox -- "$parent"
+      chmod 755 -- "$parent"
+      parent=$(dirname -- "$parent")
+    done
+  done < <(find /opt/language \
+      \( -path /opt/language/installs -o -path /opt/language/bin \) -prune \
+      -o -type f -print0 |
+    while IFS= read -r -d '' file; do
+      grep -h -I -oE '/mnt/cache/[A-Za-z0-9._/-]+' "$file" || true
+    done | sort -u)
+fi
+EOF
+chmod 755 "$ROOTFS/usr/local/libexec/orchestrator-session-env"
+
+cat > "$ROOTFS/etc/systemd/system/orchestrator-session-env.service" <<'EOF'
+[Unit]
+Description=Publish orchestrator session environment
+After=local-fs.target orchestrator-cache.service
+Before=sshd.service sshd.socket
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/libexec/orchestrator-session-env
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl --root="$ROOTFS" enable orchestrator-session-env.service
+
 fstab_iso() {
   local label="$1" mountpoint="$2"
   if ! grep -q "LABEL=${label} " "$ROOTFS/etc/fstab"; then
@@ -170,18 +227,8 @@ fstab_iso() {
 fstab_iso orchestrator-language /opt/language
 fstab_iso orchestrator-agents /opt/agents
 
-touch "$ROOTFS/etc/environment"
-set_kv "$ROOTFS/etc/environment" PATH "/opt/language/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
-set_kv "$ROOTFS/etc/environment" GITLIBS /mnt/cache/gitlibs
-set_kv "$ROOTFS/etc/environment" CLJ_CONFIG /etc/clojure
-set_kv "$ROOTFS/etc/environment" MAVEN_ARGS "-s /etc/maven/settings.xml"
-
-cat > "$ROOTFS/etc/clojure/deps.edn" <<'EOF'
-{:mvn/local-repo "/mnt/cache/m2"}
-EOF
-
-cat > "$ROOTFS/etc/maven/settings.xml" <<'EOF'
-<settings>
-  <localRepository>/mnt/cache/m2</localRepository>
-</settings>
-EOF
+install -d -m 755 "$ROOTFS/usr/lib/orchestrator"
+base_env="$ROOTFS/usr/lib/orchestrator/environment"
+touch "$base_env"
+set_kv "$base_env" PATH "/opt/language/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+cp "$base_env" "$ROOTFS/etc/environment"

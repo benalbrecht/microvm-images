@@ -41,7 +41,12 @@ jobs:
           if [[ -n "${INPUT_IMAGE}" ]]; then
             IMAGE="$INPUT_IMAGE"
           fi
-          sudo ./oci-to-qcow2.sh --image "$IMAGE" --size "$SIZE" --output "$FILENAME"
+          rootfs="${RUNNER_TEMP}/microvm-rootfs"
+          rm -rf "$rootfs"
+          sudo ./oci-to-rootfs.sh --image "$IMAGE" --rootfs "$rootfs"
+          sudo ./orchestrator-guest.sh --rootfs "$rootfs"
+          sudo ./rootfs-to-qcow2.sh --rootfs "$rootfs" --size "$SIZE" --output "$FILENAME"
+          sudo rm -rf "$rootfs"
           sudo chmod a+r "$FILENAME"
           qemu-img convert -c -O qcow2 "$FILENAME" "${FILENAME}.compressed"
           mv -f "${FILENAME}.compressed" "$FILENAME"

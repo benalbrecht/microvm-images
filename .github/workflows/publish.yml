@@ -51,11 +51,17 @@ jobs:
           qemu-img convert -c -O qcow2 "$FILENAME" "${FILENAME}.compressed"
           mv -f "${FILENAME}.compressed" "$FILENAME"
           sha256sum "$FILENAME" | tee "${FILENAME}.sha256"
+          sudo ./cache-qcow2.sh --size "$CACHE_SIZE" --output "$CACHE_FILENAME"
+          sudo chmod a+r "$CACHE_FILENAME"
+          qemu-img convert -c -O qcow2 "$CACHE_FILENAME" "${CACHE_FILENAME}.compressed"
+          mv -f "${CACHE_FILENAME}.compressed" "$CACHE_FILENAME"
+          sha256sum "$CACHE_FILENAME" | tee "${CACHE_FILENAME}.sha256"
           digest="$(skopeo inspect --format '{{.Digest}}' "docker://${IMAGE}")"
           {
             echo "IMAGE=${IMAGE}"
             echo "DIGEST=${digest}"
             echo "FILENAME=${FILENAME}"
+            echo "CACHE_FILENAME=${CACHE_FILENAME}"
           } >> "$GITHUB_ENV"
 
       - name: Publish the release
@@ -78,10 +84,12 @@ jobs:
           tag="$(printf '%s' "${namespace}-${version}-${count}" | tr -c 'A-Za-z0-9._-' '-')"
           notes="$(printf 'Source: %s\nDigest: %s\n' "$IMAGE" "$DIGEST")"
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "$FILENAME" "${FILENAME}.sha256" --clobber
+            gh release upload "$tag" "$FILENAME" "${FILENAME}.sha256" \
+              "$CACHE_FILENAME" "${CACHE_FILENAME}.sha256" --clobber
             gh release edit "$tag" --notes "$notes"
           else
             gh release create "$tag" "$FILENAME" "${FILENAME}.sha256" \
+              "$CACHE_FILENAME" "${CACHE_FILENAME}.sha256" \
               --title "$tag" \
               --notes "$notes"
           fi

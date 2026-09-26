@@ -13,7 +13,7 @@ pvesh create /nodes/pve/qemu \
   --scsi0 local-zfs:0,import-from=local:import/almalinux-10.qcow2
 ```
 
-The release image is one qcow2. `oci-to-rootfs.sh` makes the rootfs bootable, `orchestrator-guest.sh` adds the sandbox user and the cache and tools mounts, and `rootfs-to-qcow2.sh` packs it. Build locally, as root:
+The release contains the root qcow2 and `orchestrator-cache.qcow2`, an empty ext4 image labeled `orchestrator-cache`. `oci-to-rootfs.sh` makes the rootfs bootable, `orchestrator-guest.sh` adds the sandbox user and the cache and tools mounts, and `rootfs-to-qcow2.sh` packs the root. `cache-qcow2.sh` packs the cache image. Build locally, as root:
 
 ```bash
 set -a
@@ -23,8 +23,9 @@ rootfs=$(mktemp -d)/rootfs
 ./oci-to-rootfs.sh --image "$IMAGE" --rootfs "$rootfs"
 ./orchestrator-guest.sh --rootfs "$rootfs"
 ./rootfs-to-qcow2.sh --rootfs "$rootfs" --size "$SIZE" --output "$FILENAME"
+./cache-qcow2.sh --size "$CACHE_SIZE" --output "$CACHE_FILENAME"
 ```
 
 `oci-to-qcow2.sh` is the bootable image without the orchestrator guest: the same rootfs prep and one pack.
 
-The boot prep follows the enterprise-Linux path in [pve-microvm-template](https://github.com/rcarmo/pve-microvm/blob/main/tools/pve-microvm-template): NetworkManager DHCP, a serial console on `ttyS0` that autologins as root, OpenSSH, cloud-init, and the QEMU guest agent. The guest script leaves that console in place. SSH allows the `sandbox` user and refuses root. `mise` is installed from the `jdxcode/mise` EPEL 10 COPR at `mise-2026.9.14-1.el10`, and that repo is disabled afterward. The cache filesystem label is `orchestrator-cache`, mounted at `/mnt/cache`. The language ISO volume label is `orchestrator-language`, mounted at `/opt/language`. The agents ISO volume label is `orchestrator-agents`, mounted at `/opt/agents`. A missing ISO does not fail boot.
+The boot prep follows the enterprise-Linux path in [pve-microvm-template](https://github.com/rcarmo/pve-microvm/blob/main/tools/pve-microvm-template): NetworkManager DHCP, a serial console on `ttyS0` that autologins as root, OpenSSH, cloud-init, and the QEMU guest agent. The guest script leaves that console in place. SSH allows the `sandbox` user and refuses root. `mise` is installed from the `jdxcode/mise` EPEL 10 COPR at `mise-2026.9.14-1.el10`, and that repo is disabled afterward. The cache filesystem label is `orchestrator-cache`, mounted at `/mnt/cache`. The language ISO volume label is `orchestrator-language`, mounted at `/opt/language`. The agents ISO volume label is `orchestrator-agents`, mounted at `/opt/agents`. A missing ISO does not fail boot. Before `sshd` starts, a oneshot writes `/etc/environment` from `/usr/lib/orchestrator/environment` and appends `/opt/language/environment` when the language ISO carries that dotenv.

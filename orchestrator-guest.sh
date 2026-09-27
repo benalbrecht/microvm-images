@@ -126,14 +126,19 @@ EOF
 cat > "$ROOTFS/usr/local/libexec/orchestrator-mount-cache" <<'EOF'
 #!/bin/bash
 # The cache disk is writable. Mount read-only only when the device itself is.
+# The filesystem label is orch-cache. ext4 labels are 16 bytes.
 set -euo pipefail
 dev=""
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  dev=$(blkid -L orchestrator-cache || true)
+  dev=$(blkid -L orch-cache || true)
   [[ -n "$dev" ]] && break
   sleep 1
 done
-[[ -n "$dev" ]] || exit 0
+if [[ -z "$dev" ]]; then
+  echo "orchestrator-mount-cache: no filesystem labeled orch-cache" >&2
+  exit 1
+fi
+echo "orchestrator-mount-cache: orch-cache on $dev"
 mkdir -p /mnt/cache
 if ! findmnt -n /mnt/cache >/dev/null 2>&1; then
   opts=rw

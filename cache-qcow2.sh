@@ -1,5 +1,5 @@
 #!/bin/bash
-# Empty ext4 image. The filesystem label is orchestrator-cache.
+# Empty ext4 image. The filesystem label is orch-cache. ext4 keeps 16 bytes.
 
 set -euo pipefail
 
@@ -46,7 +46,7 @@ trap cleanup EXIT
 
 RAW_IMAGE="${WORKDIR}/disk.raw"
 truncate -s "$SIZE" "$RAW_IMAGE"
-mkfs.ext4 -F -L orchestrator-cache "$RAW_IMAGE"
+mkfs.ext4 -F -L orch-cache "$RAW_IMAGE"
 mkdir -p "$(dirname "$OUTPUT")"
 qemu-img convert -f raw -O qcow2 "$RAW_IMAGE" "$PARTIAL"
 mv -f "$PARTIAL" "$OUTPUT"

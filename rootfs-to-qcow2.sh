@@ -4,13 +4,13 @@
 set -euo pipefail
 
 ROOTFS=""
-SIZE="2G"
+SIZE="20G"
 OUTPUT=""
 WORKDIR=""
 PARTIAL=""
 
 usage() {
-  echo "usage: $0 --rootfs PATH --output PATH [--size 2G]" >&2
+  echo "usage: $0 --rootfs PATH --output PATH [--size 20G]" >&2
   exit 2
 }
 

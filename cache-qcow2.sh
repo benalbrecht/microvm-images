@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-SIZE="1G"
+SIZE="10G"
 OUTPUT=""
 WORKDIR=""
 PARTIAL=""

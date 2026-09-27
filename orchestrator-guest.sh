@@ -106,6 +106,8 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 PubkeyAuthentication yes
 AllowUsers sandbox
+AllowTcpForwarding remote
+GatewayPorts no
 EOF
 
 cfg="$ROOTFS/etc/cloud/cloud.cfg"

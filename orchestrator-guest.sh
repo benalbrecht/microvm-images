@@ -211,7 +211,8 @@ chmod 755 "$ROOTFS/usr/local/libexec/orchestrator-session-env"
 cat > "$ROOTFS/etc/systemd/system/orchestrator-session-env.service" <<'EOF'
 [Unit]
 Description=Publish orchestrator session environment
-After=local-fs.target orchestrator-cache.service
+Wants=opt-language.mount
+After=local-fs.target orchestrator-cache.service opt-language.mount
 Before=sshd.service sshd.socket
 
 [Service]

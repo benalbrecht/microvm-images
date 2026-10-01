@@ -101,6 +101,7 @@ install -d -m 755 "$ROOTFS/mnt/cache" "$ROOTFS/opt/language" "$ROOTFS/opt/agents
   "$ROOTFS/etc/cloud/cloud.cfg.d" \
   "$ROOTFS/etc/systemd/system" \
   "$ROOTFS/etc/systemd/system/sshd.service.d"
+chroot "$ROOTFS" chown sandbox:sandbox /opt/language
 install -m 755 "$SCRIPT_DIR/orchestrator-cache-maps.py" \
   "$ROOTFS/usr/local/libexec/orchestrator-cache-maps"
 
@@ -231,5 +232,5 @@ fstab_iso orchestrator-agents /opt/agents
 install -d -m 755 "$ROOTFS/usr/lib/orchestrator"
 base_env="$ROOTFS/usr/lib/orchestrator/environment"
 touch "$base_env"
-set_kv "$base_env" PATH "/opt/language/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+set_kv "$base_env" PATH "/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
 cp "$base_env" "$ROOTFS/etc/environment"

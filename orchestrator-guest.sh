@@ -3,6 +3,7 @@
 # Leaves the serial console as a root autologin. SSH is the sandbox user.
 
 set -euo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 ROOTFS=""
 ROOTFS_DIR=""
@@ -98,7 +99,16 @@ rm -f "$ROOTFS"/etc/ssh/ssh_host_*
 install -d -m 755 "$ROOTFS/mnt/cache" "$ROOTFS/opt/language" "$ROOTFS/opt/agents" \
   "$ROOTFS/usr/local/libexec" "$ROOTFS/etc/ssh/sshd_config.d" \
   "$ROOTFS/etc/cloud/cloud.cfg.d" \
-  "$ROOTFS/etc/systemd/system"
+  "$ROOTFS/etc/systemd/system" \
+  "$ROOTFS/etc/systemd/system/sshd.service.d"
+install -m 755 "$SCRIPT_DIR/orchestrator-cache-maps.py" \
+  "$ROOTFS/usr/local/libexec/orchestrator-cache-maps"
+
+cat > "$ROOTFS/etc/systemd/system/sshd.service.d/orchestrator-session-env.conf" <<'EOF'
+[Unit]
+Requires=orchestrator-session-env.service
+After=orchestrator-session-env.service
+EOF
 
 cat > "$ROOTFS/etc/ssh/sshd_config.d/00-sandbox.conf" <<'EOF'
 PermitRootLogin no
@@ -172,9 +182,8 @@ systemctl --root="$ROOTFS" enable orchestrator-cache.service
 cat > "$ROOTFS/usr/local/libexec/orchestrator-session-env" <<'EOF'
 #!/bin/bash
 # Publish /etc/environment before sshd. The image file is the base. The
-# language ISO may add a dotenv. Cache directories are the /mnt/cache paths
-# named on that ISO, outside installs and bin. This script copies files and
-# creates those directories. It does not run mise.
+# language ISO may add a dotenv and a home-relative package-cache map. This
+# script copies files and applies the map before sshd starts. It does not run mise.
 set -euo pipefail
 base=/usr/lib/orchestrator/environment
 [[ -f "$base" ]] || exit 1
@@ -186,24 +195,8 @@ if [[ -f /opt/language/environment ]]; then
 fi
 chmod 644 "$tmp"
 mv -f "$tmp" /etc/environment
-if findmnt -n /mnt/cache >/dev/null 2>&1 && [[ -d /opt/language ]]; then
-  while IFS= read -r dir; do
-    [[ -z "$dir" || "$dir" == *..* ]] && continue
-    mkdir -p -- "$dir"
-    chown sandbox:sandbox -- "$dir"
-    chmod 755 -- "$dir"
-    parent=$(dirname -- "$dir")
-    while [[ "$parent" == /mnt/cache/* ]]; do
-      chown sandbox:sandbox -- "$parent"
-      chmod 755 -- "$parent"
-      parent=$(dirname -- "$parent")
-    done
-  done < <(find /opt/language \
-      \( -path /opt/language/installs -o -path /opt/language/bin \) -prune \
-      -o -type f -print0 |
-    while IFS= read -r -d '' file; do
-      grep -h -I -oE '/mnt/cache/[A-Za-z0-9._/-]+' "$file" || true
-    done | sort -u)
+if [[ -f /opt/language/caches.json ]]; then
+  /usr/bin/python3 /usr/local/libexec/orchestrator-cache-maps
 fi
 EOF
 chmod 755 "$ROOTFS/usr/local/libexec/orchestrator-session-env"

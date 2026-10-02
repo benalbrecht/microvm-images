@@ -2,7 +2,7 @@
 
 Bootable qcow2 images for [Proxmox microVMs](https://github.com/rcarmo/pve-microvm). GitHub Actions builds the image and publishes the qcow2 on a release. The virtual disk size is the `SIZE` in `image.env`. The compressed file size is only the release download.
 
-The current pin is `docker.io/almalinux/10-init:10.2-20260902`. The release tag is `almalinux-<version>-<commit count>` on `main`.
+The current pin is `docker.io/almalinux/10-init:10.2-20261002`. The release tag is `almalinux-<version>-<commit count>` on `main`.
 
 Copy the qcow2 to a Proxmox directory storage that has the `import` content type, then create the guest. That create allocates the zvol:
 

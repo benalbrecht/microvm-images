@@ -41,7 +41,8 @@ mount --bind /dev "$ROOTFS/dev"
 
 # Runtime tools support Git-based language caches; Python applies cache maps;
 # xorriso builds language ISOs inside the guest.
-chroot "$ROOTFS" /usr/bin/dnf install -y git python3 'dnf-command(copr)' xorriso
+# nodejs is runtime for various agents, so we install it on the base image
+chroot "$ROOTFS" /usr/bin/dnf install -y git python3 'dnf-command(copr)' xorriso nodejs24
 # mise comes from this pinned COPR; disable the repo afterward to avoid drift.
 chroot "$ROOTFS" /usr/bin/dnf -y copr enable jdxcode/mise
 chroot "$ROOTFS" /usr/bin/dnf install -y mise-2026.9.14-1.el10

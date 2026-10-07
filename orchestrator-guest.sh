@@ -42,7 +42,7 @@ mount --bind /dev "$ROOTFS/dev"
 # Runtime tools support Git-based language caches; Python applies cache maps;
 # xorriso builds language ISOs inside the guest.
 # nodejs is runtime for various agents, so we install it on the base image
-chroot "$ROOTFS" /usr/bin/dnf install -y git python3 'dnf-command(copr)' xorriso nodejs24
+chroot "$ROOTFS" /usr/bin/dnf install -y git python3 'dnf-command(copr)' xorriso nodejs24 nmap-ncat
 # mise comes from this pinned COPR; disable the repo afterward to avoid drift.
 chroot "$ROOTFS" /usr/bin/dnf -y copr enable jdxcode/mise
 chroot "$ROOTFS" /usr/bin/dnf install -y mise-2026.9.14-1.el10
@@ -64,6 +64,7 @@ install -d -m 755 "$ROOTFS/mnt/cache" "$ROOTFS/opt/language" "$ROOTFS/opt/agents
   "$ROOTFS/etc/systemd/system" \
   "$ROOTFS/etc/systemd/system/sshd.service.d"
 chroot "$ROOTFS" chown sandbox:sandbox /opt/language
+chroot "$ROOTFS" usermod -L root
 # The cache-map helper is run from the boot service when an ISO provides a map.
 install -m 755 "$SCRIPT_DIR/orchestrator-cache-maps.py" \
   "$ROOTFS/usr/local/libexec/orchestrator-cache-maps"

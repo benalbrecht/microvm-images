@@ -42,10 +42,12 @@ mount --bind /dev "$ROOTFS/dev"
 # Runtime tools support Git-based language caches; Python applies cache maps;
 # xorriso builds language ISOs inside the guest.
 # nodejs is runtime for various agents, so we install it on the base image
-chroot "$ROOTFS" /usr/bin/dnf install -y git python3 'dnf-command(copr)' xorriso nodejs24 nmap-ncat
+chroot "$ROOTFS" /usr/bin/dnf install -y git python3 'dnf-command(copr)' xorriso nodejs24 nmap-ncat jq epel-release
+chroot "$ROOTFS" /usr/bin/dnf install -y ripgrep fd-find
+chroot "$ROOTFS" /usr/bin/dnf config-manager --disable epel
 # mise comes from this pinned COPR; disable the repo afterward to avoid drift.
 chroot "$ROOTFS" /usr/bin/dnf -y copr enable jdxcode/mise
-chroot "$ROOTFS" /usr/bin/dnf install -y mise-2026.9.14-1.el10
+chroot "$ROOTFS" /usr/bin/dnf install -y mise
 chroot "$ROOTFS" /usr/bin/dnf -y copr disable jdxcode/mise
 chroot "$ROOTFS" /usr/bin/dnf clean all
 # The sandbox account runs SSH jobs; Git sees mounted/shared worktrees as safe.
